@@ -123,8 +123,7 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 data/backups/
-runtime/job.pid
-runtime/daemon.pid
+runtime/
 logs/
 *.log
 
