@@ -1,0 +1,34 @@
+[Unit]
+Description=小胡定时任务系统（Python版）
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/pyjobs
+Environment=PATH=/opt/pyjobs/venv/bin
+Environment=PYTHONPATH=/opt/pyjobs
+ExecStart=/opt/pyjobs/venv/bin/python /opt/pyjobs/cli.py start -d -f
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/opt/pyjobs/venv/bin/python /opt/pyjobs/cli.py stop -f
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pyjobs
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pyjobs/runtime /opt/pyjobs/data
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target 

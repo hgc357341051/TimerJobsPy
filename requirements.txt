@@ -1,0 +1,53 @@
+# 小胡定时任务系统（Python版）依赖包
+# Python版本要求: 3.8+
+
+# Web框架
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# 数据库
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# 数据库驱动
+# SQLite驱动（默认，无需额外安装）
+# MySQL驱动（可选，用于生产环境）
+pymysql>=1.1.0; python_version >= "3.8"
+
+# 任务调度
+apscheduler>=3.10.0
+
+# HTTP客户端
+requests[socks]>=2.31.0
+
+# 数据处理
+pydantic>=2.5.0
+python-multipart>=0.0.6
+
+# 字符编码检测
+chardet>=5.2.0
+
+# 日志
+loguru>=0.7.0
+
+# 环境变量
+python-dotenv>=1.0.0
+
+# 类型提示支持
+typing-extensions>=4.8.0
+
+# 开发工具（可选）
+pytest>=7.4.0; python_version >= "3.8"
+pytest-asyncio>=0.21.0; python_version >= "3.8"
+black>=23.0.0; python_version >= "3.8"
+flake8>=6.0.0; python_version >= "3.8"
+mypy>=1.7.0; python_version >= "3.8"
+
+# 安全扫描（可选）
+bandit>=1.7.0; python_version >= "3.8"
+
+# 性能测试（可选）
+locust>=2.17.0; python_version >= "3.8"
+
+# API文档生成（可选）
+pdoc3>=0.10.0; python_version >= "3.8"

@@ -1,0 +1,29 @@
+# 测试框架
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+pytest-html==4.1.1
+
+# HTTP测试客户端
+httpx==0.25.2
+
+# 类型检查
+mypy==1.7.1
+types-requests==2.31.0.10
+
+# 性能测试
+locust==2.17.0
+
+# 测试数据生成
+faker==20.1.0
+factory-boy==3.3.0
+
+# 代码质量
+black==23.11.0
+flake8==6.1.0
+isort==5.12.0
+
+# 测试工具
+freezegun==1.2.2
+responses==0.24.1 
