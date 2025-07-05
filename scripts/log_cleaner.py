@@ -2,12 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 日志清理脚本
-每10秒执行一次，清理日志文件中的特定字段
+删除runtime/jobs下的所有文件夹
 """
 
 import os
-import json
-import glob
+import shutil
 from datetime import datetime
 
 def clean_log_files():

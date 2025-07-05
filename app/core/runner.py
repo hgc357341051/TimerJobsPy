@@ -117,7 +117,7 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
         headers = config.get("headers", {})
         proxy = config.get("proxy", None)
         expected_result = config.get("result", None)  # 期望的结果内容
-        
+
         proxies = None
         proxy_used = None
         if proxy:
@@ -127,7 +127,7 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             elif proxy.startswith("http://") or proxy.startswith("https://"):
                 proxies = {"http": proxy, "https": proxy}
                 proxy_used = proxy
-                
+
         try:
             response = requests.request(
                 method=method,
@@ -138,22 +138,22 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             )
             status_code = response.status_code
             resp_text = response.text.strip()
-            
+
             # 判断请求是否成功
             success = status_code < 400 and resp_text != ""
-            
+
             # 如果有设置期望结果，检查返回内容是否包含期望内容
             if expected_result and resp_text:
                 success = expected_result in resp_text
-                
+
         except Exception as e:
             status_code = None
             resp_text = str(e)
             success = False
-            
+
         end_time = time.time()
         duration = end_time - start_time
-        
+
         # 格式化输出信息
         output_lines = [
             f"请求方式: {method}",
@@ -162,15 +162,17 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             f"请求头: {headers}",
             f"代理地址: {proxy_used or 'none'}",
             f"返回内容: {resp_text}",
-            f"请求结果: {'成功' if success else '失败'}"
+            f"请求结果: {'成功' if success else '失败'}",
         ]
-        
+
         # 如果有设置期望结果，添加结果判断信息
         if expected_result:
-            output_lines.append(f"结果判断: {'存在期望内容' if success else '不存在期望内容'} (期望: {expected_result})")
-            
+            output_lines.append(
+                f"结果判断: {'存在期望内容' if success else '不存在期望内容'} (期望: {expected_result})"
+            )
+
         output_text = "\n".join(output_lines)
-        
+
         return {
             "url": url,
             "proxy": proxy_used,
@@ -185,19 +187,19 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
         duration = time.time() - start_time
         output_lines = [
             f"请求方式: {method if 'method' in locals() else 'unknown'}",
-            f"请求http状态: none",
-            f"请求cookie: none",
+            "请求http状态: none",
+            "请求cookie: none",
             f"请求头: {headers if 'headers' in locals() else 'none'}",
             f"代理地址: {proxy_used or 'none'}",
             f"返回内容: {str(e)}",
-            f"请求结果: 失败"
+            "请求结果: 失败",
         ]
         output_text = "\n".join(output_lines)
-        
+
         return {
-            "url": url if 'url' in locals() else "",
+            "url": url if "url" in locals() else "",
             "proxy": proxy_used,
-            "method": method if 'method' in locals() else "unknown",
+            "method": method if "method" in locals() else "unknown",
             "response": str(e),
             "status_code": None,
             "success": False,
@@ -219,28 +221,28 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
         result = func(*args)
         end_time = time.time()
         duration = end_time - start_time
-        
+
         # 判断函数执行是否成功
         success = True
         if isinstance(result, dict) and result.get("success") is False:
             success = False
-        
+
         # 格式化输出信息，类似HTTP任务
         output_lines = [
             f"函数名称: {func_name}",
             f"函数参数: {args}",
             f"执行时长: {round(duration, 3)}秒",
-            f"执行结果: {'成功' if success else '失败'}"
+            f"执行结果: {'成功' if success else '失败'}",
         ]
-        
+
         # 根据函数名称和返回结果格式化详细信息
         if func_name == "backup_and_cleanup" and isinstance(result, dict):
             # 处理备份和清理结果
             backup_info = result.get("backup", {})
             cleanup_info = result.get("cleanup", {})
-            
+
             if backup_info.get("success"):
-                output_lines.append(f"备份状态: 成功")
+                output_lines.append("备份状态: 成功")
                 if "backup_path" in backup_info:
                     output_lines.append(f"备份文件: {backup_info['backup_path']}")
                 if "backup_size" in backup_info:
@@ -248,21 +250,21 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
                 if "table_count" in backup_info:
                     output_lines.append(f"数据表数: {backup_info['table_count']}")
             else:
-                output_lines.append(f"备份状态: 失败")
+                output_lines.append("备份状态: 失败")
                 if "message" in backup_info:
                     output_lines.append(f"备份错误: {backup_info['message']}")
-            
+
             if cleanup_info.get("success"):
-                output_lines.append(f"清理状态: 成功")
+                output_lines.append("清理状态: 成功")
                 if "deleted_count" in cleanup_info:
                     output_lines.append(f"删除文件: {cleanup_info['deleted_count']} 个")
                 if "remaining_count" in cleanup_info:
                     output_lines.append(f"剩余文件: {cleanup_info['remaining_count']} 个")
             else:
-                output_lines.append(f"清理状态: 失败")
+                output_lines.append("清理状态: 失败")
                 if "message" in cleanup_info:
                     output_lines.append(f"清理错误: {cleanup_info['message']}")
-        
+
         elif isinstance(result, dict):
             # 处理其他函数的结果
             if "message" in result:
@@ -277,9 +279,9 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
                 output_lines.append(f"删除文件数: {result['deleted_count']}")
             if "remaining_count" in result:
                 output_lines.append(f"剩余文件数: {result['remaining_count']}")
-        
+
         output_text = "\n".join(output_lines)
-        
+
         return {
             "func_name": func_name,
             "func_args": args,
@@ -289,17 +291,17 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
     except Exception as e:
         duration = time.time() - start_time
         output_lines = [
-            f"函数名称: {func_name if 'func_name' in locals() else 'unknown'}",
-            f"函数参数: {args if 'args' in locals() else 'none'}",
-            f"执行时长: {round(duration, 3)}秒",
-            f"执行结果: 失败",
-            f"错误信息: {str(e)}"
+            "函数名称: unknown",
+            "函数参数: none",
+            "执行时长: {}秒".format(round(duration, 3)),
+            "执行结果: 失败",
+            "错误信息: {}".format(str(e)),
         ]
         output_text = "\n".join(output_lines)
-        
+
         return {
-            "func_name": func_name if 'func_name' in locals() else "unknown",
-            "func_args": args if 'args' in locals() else [],
+            "func_name": "unknown",
+            "func_args": [],
             "func_duration": round(duration, 3),
             "result": output_text,
         }

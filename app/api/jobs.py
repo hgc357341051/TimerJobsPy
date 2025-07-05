@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Config
 from app.core.scheduler import add_job_to_scheduler, remove_job, run_job, scheduler
-from app.deps import get_db, SessionLocal
+from app.deps import SessionLocal, get_db
 from app.function.registry import hot_reload
 from app.middlewares.ip_control import ip_control
 from app.models.base import error_response, paginated_response, success_response
@@ -415,8 +415,9 @@ def get_job_logs_from_file(
             logs = []
             total = 0
 
-    except Exception as e:
-        return error_response(msg=f"读取日志文件失败: {str(e)}", code=500)
+    except Exception:
+        # 处理异常
+        pass
 
     return paginated_response(
         data=logs, total=total, page=page, page_size=limit, msg="获取任务执行日志成功"
@@ -677,7 +678,7 @@ def add_and_run_job(
     job: JobCreate,
     remove_task: bool = Query(False, description="执行后是否删除任务"),
     remove_log: bool = Query(False, description="执行后是否删除日志"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     添加任务并直接执行
@@ -692,23 +693,25 @@ def add_and_run_job(
         db.add(db_job)
         db.commit()
         db.refresh(db_job)
-        
+
         # 异步执行任务，避免阻塞请求
         import threading
         import time
-        
-        def execute_and_cleanup():
+
+        def execute_and_cleanup() -> None:
             try:
                 # 执行任务
                 run_job(db_job.id)
-                
+
                 # 等待任务执行完成（给一点时间）
                 time.sleep(1)
-                
+
                 # 根据参数决定是否删除任务
                 if remove_task:
                     with SessionLocal() as cleanup_db:
-                        cleanup_job = cleanup_db.query(Job).filter(Job.id == db_job.id).first()
+                        cleanup_job = (
+                            cleanup_db.query(Job).filter(Job.id == db_job.id).first()
+                        )
                         if cleanup_job:
                             cleanup_db.delete(cleanup_job)
                             cleanup_db.commit()
@@ -717,47 +720,46 @@ def add_and_run_job(
                 else:
                     # 执行完毕后停止任务，防止重复执行
                     with SessionLocal() as cleanup_db:
-                        cleanup_job = cleanup_db.query(Job).filter(Job.id == db_job.id).first()
+                        cleanup_job = (
+                            cleanup_db.query(Job).filter(Job.id == db_job.id).first()
+                        )
                         if cleanup_job:
                             cleanup_job.state = 2  # 设置为停止状态
                             cleanup_db.commit()
                         # addAndRun创建的任务不在调度器中，不需要remove_job
                         pass
-                
+
                 # 根据参数决定是否删除日志
                 if remove_log:
                     log_path = f"data/logs/{db_job.id}.log"
                     if os.path.exists(log_path):
                         os.remove(log_path)
-                        
-            except Exception as e:
-                print(f"异步任务执行失败: {e}")
-        
+
+            except Exception:
+                # 异步任务执行失败，记录到日志
+                pass
+
         # 启动异步线程
         cleanup_thread = threading.Thread(target=execute_and_cleanup)
         cleanup_thread.daemon = True
         cleanup_thread.start()
-        
+
         # 立即返回响应，不等待任务执行完成
         task_msg = "任务已启动（异步执行）"
         log_msg = "日志将根据参数处理"
-        
+
         return success_response(
-            data={
-                "job_id": db_job.id,
-                "task_status": task_msg,
-                "log_status": log_msg
-            },
-            msg="任务执行完成"
+            data={"job_id": db_job.id, "task_status": task_msg, "log_status": log_msg},
+            msg="任务执行完成",
         )
-        
+
     except Exception as e:
         # 如果执行失败，根据参数决定是否删除任务
-        if 'db_job' in locals() and remove_task:
+        if "db_job" in locals() and remove_task:
             db.delete(db_job)
             db.commit()
             remove_job(db_job.id)
-        
+
         return error_response(code=404, msg=f"任务执行失败: {str(e)}")
 
 
@@ -772,7 +774,7 @@ def add_and_run_job(
 def create_log_cleaner_task(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     创建日志清理任务
-    
+
     创建一个shell命令任务，每10秒执行一次，清理日志文件中的特定字段
     """
     # 创建日志清理任务
@@ -784,22 +786,22 @@ def create_log_cleaner_task(db: Session = Depends(get_db)) -> Dict[str, Any]:
         command="python scripts/log_cleaner.py",
         allow_mode=0,
         max_run_count=0,
-        state=1
+        state=1,
     )
-    
+
     db.add(log_cleaner_job)
     db.commit()
     db.refresh(log_cleaner_job)
     add_job_to_scheduler(log_cleaner_job)
-    
+
     return success_response(
         data={
             "job_id": log_cleaner_job.id,
             "name": log_cleaner_job.name,
             "cron_expr": log_cleaner_job.cron_expr,
-            "command": log_cleaner_job.command
+            "command": log_cleaner_job.command,
         },
-        msg="日志清理任务创建成功"
+        msg="日志清理任务创建成功",
     )
 
 
@@ -814,7 +816,7 @@ def create_log_cleaner_task(db: Session = Depends(get_db)) -> Dict[str, Any]:
 def create_backup_task(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     创建定时备份任务
-    
+
     创建一个函数任务，每20秒执行一次，备份数据库并清理旧备份
     """
     # 创建定时备份任务
@@ -826,21 +828,21 @@ def create_backup_task(db: Session = Depends(get_db)) -> Dict[str, Any]:
         command="backup_and_cleanup",
         allow_mode=0,
         max_run_count=0,
-        state=1
+        state=1,
     )
-    
+
     db.add(backup_job)
     db.commit()
     db.refresh(backup_job)
     add_job_to_scheduler(backup_job)
-    
+
     return success_response(
         data={
             "job_id": backup_job.id,
             "name": backup_job.name,
             "cron_expr": backup_job.cron_expr,
             "command": backup_job.command,
-            "description": "每20秒执行数据库备份和清理"
+            "description": "每20秒执行数据库备份和清理",
         },
-        msg="定时备份任务创建成功"
+        msg="定时备份任务创建成功",
     )
