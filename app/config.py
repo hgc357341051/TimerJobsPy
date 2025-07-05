@@ -37,10 +37,10 @@ class Config:
         "DATABASE_SQLITE_TABLEPREFIX", "xiaohus_"
     )
     DATABASE_SQLITE_MAXOPENCONNS: Final[int] = int(
-        os.getenv("DATABASE_SQLITE_MAXOPENCONNS", "1")
+        os.getenv("DATABASE_SQLITE_MAXOPENCONNS", "10")
     )
     DATABASE_SQLITE_MAXIDLECONNS: Final[int] = int(
-        os.getenv("DATABASE_SQLITE_MAXIDLECONNS", "1")
+        os.getenv("DATABASE_SQLITE_MAXIDLECONNS", "5")
     )
 
     # 日志配置

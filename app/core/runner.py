@@ -116,6 +116,8 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
         timeout = config.get("timeout", 60)
         headers = config.get("headers", {})
         proxy = config.get("proxy", None)
+        expected_result = config.get("result", None)  # 期望的结果内容
+        
         proxies = None
         proxy_used = None
         if proxy:
@@ -125,6 +127,7 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             elif proxy.startswith("http://") or proxy.startswith("https://"):
                 proxies = {"http": proxy, "https": proxy}
                 proxy_used = proxy
+                
         try:
             response = requests.request(
                 method=method,
@@ -135,24 +138,39 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             )
             status_code = response.status_code
             resp_text = response.text.strip()
+            
+            # 判断请求是否成功
             success = status_code < 400 and resp_text != ""
+            
+            # 如果有设置期望结果，检查返回内容是否包含期望内容
+            if expected_result and resp_text:
+                success = expected_result in resp_text
+                
         except Exception as e:
             status_code = None
             resp_text = str(e)
             success = False
+            
         end_time = time.time()
         duration = end_time - start_time
-        # 格式化result为纯文本
-        result_lines = [
-            f"url: {url}",
-            f"proxy: {proxy_used or 'none'}",
-            f"method: {method}",
-            f"response: {resp_text}",
-            f"status_code: {status_code}",
-            f"success: {success}",
-            f"duration: {round(duration, 3)}s",
+        
+        # 格式化输出信息
+        output_lines = [
+            f"请求方式: {method}",
+            f"请求http状态: {status_code or 'none'}",
+            f"请求cookie: {dict(response.cookies) if 'response' in locals() else 'none'}",
+            f"请求头: {headers}",
+            f"代理地址: {proxy_used or 'none'}",
+            f"返回内容: {resp_text}",
+            f"请求结果: {'成功' if success else '失败'}"
         ]
-        result_text = "\n".join(result_lines)
+        
+        # 如果有设置期望结果，添加结果判断信息
+        if expected_result:
+            output_lines.append(f"结果判断: {'存在期望内容' if success else '不存在期望内容'} (期望: {expected_result})")
+            
+        output_text = "\n".join(output_lines)
+        
         return {
             "url": url,
             "proxy": proxy_used,
@@ -161,29 +179,30 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             "status_code": status_code,
             "success": success,
             "http_duration": round(duration, 3),
-            "result": result_text,
+            "result": output_text,
         }
     except Exception as e:
         duration = time.time() - start_time
-        result_lines = [
-            f"url: {url}",
-            f"proxy: {proxy_used or 'none'}",
-            f"method: {method}",
-            f"response: {str(e)}",
-            "status_code: none",
-            "success: false",
-            f"duration: {round(duration, 3)}s",
+        output_lines = [
+            f"请求方式: {method if 'method' in locals() else 'unknown'}",
+            f"请求http状态: none",
+            f"请求cookie: none",
+            f"请求头: {headers if 'headers' in locals() else 'none'}",
+            f"代理地址: {proxy_used or 'none'}",
+            f"返回内容: {str(e)}",
+            f"请求结果: 失败"
         ]
-        result_text = "\n".join(result_lines)
+        output_text = "\n".join(output_lines)
+        
         return {
-            "url": url,
+            "url": url if 'url' in locals() else "",
             "proxy": proxy_used,
-            "method": method,
+            "method": method if 'method' in locals() else "unknown",
             "response": str(e),
             "status_code": None,
             "success": False,
             "http_duration": round(duration, 3),
-            "result": result_text,
+            "result": output_text,
         }
 
 
@@ -200,21 +219,90 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
         result = func(*args)
         end_time = time.time()
         duration = end_time - start_time
-        # 格式化result为纯文本
-        import json as _json
-
-        try:
-            result_text = _json.dumps(result, ensure_ascii=False)
-        except Exception:
-            result_text = str(result)
+        
+        # 判断函数执行是否成功
+        success = True
+        if isinstance(result, dict) and result.get("success") is False:
+            success = False
+        
+        # 格式化输出信息，类似HTTP任务
+        output_lines = [
+            f"函数名称: {func_name}",
+            f"函数参数: {args}",
+            f"执行时长: {round(duration, 3)}秒",
+            f"执行结果: {'成功' if success else '失败'}"
+        ]
+        
+        # 根据函数名称和返回结果格式化详细信息
+        if func_name == "backup_and_cleanup" and isinstance(result, dict):
+            # 处理备份和清理结果
+            backup_info = result.get("backup", {})
+            cleanup_info = result.get("cleanup", {})
+            
+            if backup_info.get("success"):
+                output_lines.append(f"备份状态: 成功")
+                if "backup_path" in backup_info:
+                    output_lines.append(f"备份文件: {backup_info['backup_path']}")
+                if "backup_size" in backup_info:
+                    output_lines.append(f"备份大小: {backup_info['backup_size']} 字节")
+                if "table_count" in backup_info:
+                    output_lines.append(f"数据表数: {backup_info['table_count']}")
+            else:
+                output_lines.append(f"备份状态: 失败")
+                if "message" in backup_info:
+                    output_lines.append(f"备份错误: {backup_info['message']}")
+            
+            if cleanup_info.get("success"):
+                output_lines.append(f"清理状态: 成功")
+                if "deleted_count" in cleanup_info:
+                    output_lines.append(f"删除文件: {cleanup_info['deleted_count']} 个")
+                if "remaining_count" in cleanup_info:
+                    output_lines.append(f"剩余文件: {cleanup_info['remaining_count']} 个")
+            else:
+                output_lines.append(f"清理状态: 失败")
+                if "message" in cleanup_info:
+                    output_lines.append(f"清理错误: {cleanup_info['message']}")
+        
+        elif isinstance(result, dict):
+            # 处理其他函数的结果
+            if "message" in result:
+                output_lines.append(f"执行消息: {result['message']}")
+            if "backup_path" in result:
+                output_lines.append(f"备份路径: {result['backup_path']}")
+            if "backup_size" in result:
+                output_lines.append(f"备份大小: {result['backup_size']} 字节")
+            if "table_count" in result:
+                output_lines.append(f"数据表数量: {result['table_count']}")
+            if "deleted_count" in result:
+                output_lines.append(f"删除文件数: {result['deleted_count']}")
+            if "remaining_count" in result:
+                output_lines.append(f"剩余文件数: {result['remaining_count']}")
+        
+        output_text = "\n".join(output_lines)
+        
         return {
             "func_name": func_name,
             "func_args": args,
             "func_duration": round(duration, 3),
-            "result": result_text,
+            "result": output_text,
         }
-    except Exception:
-        raise
+    except Exception as e:
+        duration = time.time() - start_time
+        output_lines = [
+            f"函数名称: {func_name if 'func_name' in locals() else 'unknown'}",
+            f"函数参数: {args if 'args' in locals() else 'none'}",
+            f"执行时长: {round(duration, 3)}秒",
+            f"执行结果: 失败",
+            f"错误信息: {str(e)}"
+        ]
+        output_text = "\n".join(output_lines)
+        
+        return {
+            "func_name": func_name if 'func_name' in locals() else "unknown",
+            "func_args": args if 'args' in locals() else [],
+            "func_duration": round(duration, 3),
+            "result": output_text,
+        }
 
 
 def parse_command_config(command: str) -> Dict[str, Any]:
@@ -243,6 +331,7 @@ def parse_http_config(command: str) -> Dict[str, Any]:
         "timeout": 60,
         "headers": {},
         "proxy": None,
+        "result": None,  # 期望的结果内容
     }
 
     lines = command.split("\n")
@@ -264,6 +353,8 @@ def parse_http_config(command: str) -> Dict[str, Any]:
                 config["headers"][key.strip()] = value.strip()
         elif line.startswith("【proxy】"):
             config["proxy"] = line.split("【proxy】")[1].strip()
+        elif line.startswith("【result】"):
+            config["result"] = line.split("【result】")[1].strip()
 
     return config
 

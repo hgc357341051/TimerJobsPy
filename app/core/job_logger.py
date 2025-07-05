@@ -224,7 +224,8 @@ class JobLogger:
             "duration_ms": log_data.get("duration_ms", 0),
             "mode": log_data.get("mode", ""),
             "command": log_data.get("command", ""),
-            "output": log_data.get("stdout", "")
+            "output": log_data.get("result", "")  # 使用result字段作为输出
+            or log_data.get("stdout", "")
             or log_data.get("func_result", "")
             or log_data.get("http_resp", ""),
             "error_msg": log_data.get("error_msg", ""),

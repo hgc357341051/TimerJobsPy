@@ -97,7 +97,9 @@ class JobCreate(BaseModel):
     @field_validator("cron_expr")
     @classmethod
     def validate_cron_expr(cls, v: str) -> str:
-        if not v or len(v.split()) not in [5, 6]:
+        if not v:
+            return v  # 允许空值，因为可能是Optional
+        if len(v.split()) not in [5, 6]:
             raise ValueError("cron表达式格式错误，应为5个字段（分 时 日 月 周）或6个字段（秒 分 时 日 月 周）")
         return v
 

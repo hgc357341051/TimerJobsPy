@@ -72,8 +72,18 @@ class IPControlMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Any:
         client_ip: Optional[str] = request.client.host if request.client else None
         if not client_ip:
-            raise HTTPException(status_code=400, detail="Unable to determine client IP")
+            from fastapi.responses import JSONResponse
+            from app.models.base import error_response
+            return JSONResponse(
+                status_code=200,
+                content=error_response(code=400, msg="无法确定客户端IP")
+            )
         if not ip_control.is_allowed(client_ip):
-            raise HTTPException(status_code=403, detail=f"IP {client_ip} not allowed")
+            from fastapi.responses import JSONResponse
+            from app.models.base import error_response
+            return JSONResponse(
+                status_code=200,
+                content=error_response(code=403, msg=f"IP {client_ip} 不被允许访问")
+            )
         response = await call_next(request)
         return response

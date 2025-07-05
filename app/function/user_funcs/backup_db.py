@@ -1,188 +1,146 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 数据库备份函数
-每1秒备份数据库到data/backups目录，保留最新7份备份
 """
 
 import os
 import shutil
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
-
-from app.config import Config
 
 
-def backup_database() -> Dict[str, Any]:
+def backup_database():
     """
-    备份数据库函数
-
-    功能：
-    1. 备份当前数据库到data/backups目录
-    2. 保留最新7份备份
-    3. 删除旧的备份文件
-
-    返回：
-    - success: 是否成功
-    - message: 操作消息
-    - backup_file: 备份文件名
-    - backup_count: 当前备份数量
+    备份数据库文件
+    
+    将当前的数据库文件备份到backup目录，文件名包含时间戳
     """
     try:
-        # 获取数据库路径
-        db_path = Config.get_database_url()
-        if db_path.startswith("sqlite:///"):
-            db_path = db_path.replace("sqlite:///", "")
-        else:
-            return {
-                "success": False,
-                "message": f"不支持的数据库类型: {db_path}",
-                "backup_file": None,
-                "backup_count": 0,
-            }
-
-        # 确保数据库文件存在
+        # 数据库文件路径
+        db_path = "data/jobs.db"
+        backup_dir = "data/backups"
+        
+        # 检查数据库文件是否存在
         if not os.path.exists(db_path):
             return {
                 "success": False,
                 "message": f"数据库文件不存在: {db_path}",
-                "backup_file": None,
-                "backup_count": 0,
+                "backup_path": None
             }
-
+        
         # 创建备份目录
-        backup_dir = Path(Config.BACKUP_DIR)
-        backup_dir.mkdir(parents=True, exist_ok=True)
-
+        os.makedirs(backup_dir, exist_ok=True)
+        
         # 生成备份文件名（包含时间戳）
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_filename = f"xiaohu_jobs_backup_{timestamp}.db"
-        backup_path = backup_dir / backup_filename
-
-        # 执行备份
+        backup_filename = f"jobs_backup_{timestamp}.db"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 复制数据库文件
         shutil.copy2(db_path, backup_path)
-
-        # 获取所有备份文件
-        backup_files = list(backup_dir.glob("xiaohu_jobs_backup_*.db"))
-        backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-
-        # 保留最新7份，删除多余的
-        max_backups = Config.JOB_LOG_KEEP_COUNT
-        if len(backup_files) > max_backups:
-            for old_backup in backup_files[max_backups:]:
-                try:
-                    os.remove(old_backup)
-                except Exception as e:
-                    print(f"删除旧备份文件失败: {old_backup}, 错误: {e}")
-
-        # 获取备份文件大小
-        backup_size = os.path.getsize(backup_path)
-        backup_size_mb = round(backup_size / (1024 * 1024), 2)
-
-        return {
-            "success": True,
-            "message": "数据库备份成功",
-            "backup_file": backup_filename,
-            "backup_path": str(backup_path),
-            "backup_size_mb": backup_size_mb,
-            "backup_count": len(backup_files),
-            "timestamp": timestamp,
-        }
-
+        
+        # 验证备份文件
+        if os.path.exists(backup_path):
+            # 检查备份文件是否可读
+            try:
+                conn = sqlite3.connect(backup_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+                table_count = cursor.fetchone()[0]
+                conn.close()
+                
+                return {
+                    "success": True,
+                    "message": f"数据库备份成功",
+                    "backup_path": backup_path,
+                    "backup_size": os.path.getsize(backup_path),
+                    "table_count": table_count,
+                    "timestamp": timestamp
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"备份文件验证失败: {str(e)}",
+                    "backup_path": backup_path
+                }
+        else:
+            return {
+                "success": False,
+                "message": "备份文件创建失败",
+                "backup_path": None
+            }
+            
     except Exception as e:
         return {
             "success": False,
-            "message": f"数据库备份失败: {str(e)}",
-            "backup_file": None,
-            "backup_count": 0,
+            "message": f"备份过程中发生错误: {str(e)}",
+            "backup_path": None
         }
 
 
-def get_backup_status() -> Dict[str, Any]:
+def cleanup_old_backups(keep_count=10):
     """
-    获取备份状态函数
-
-    返回：
-    - backup_count: 当前备份数量
-    - backup_files: 备份文件列表
-    - total_size_mb: 总备份大小
+    清理旧的备份文件，只保留最新的几个
+    
+    Args:
+        keep_count: 保留的备份文件数量，默认10个
     """
     try:
-        backup_dir = Path(Config.BACKUP_DIR)
-        if not backup_dir.exists():
-            return {"backup_count": 0, "backup_files": [], "total_size_mb": 0}
-
-        backup_files = list(backup_dir.glob("xiaohu_jobs_backup_*.db"))
-        backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-
-        total_size = sum(f.stat().st_size for f in backup_files)
-        total_size_mb = round(total_size / (1024 * 1024), 2)
-
-        file_list = []
-        for f in backup_files:
-            file_list.append(
-                {
-                    "filename": f.name,
-                    "size_mb": round(f.stat().st_size / (1024 * 1024), 2),
-                    "modified_time": datetime.fromtimestamp(f.stat().st_mtime).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                }
-            )
-
-        return {
-            "backup_count": len(backup_files),
-            "backup_files": file_list,
-            "total_size_mb": total_size_mb,
-        }
-
-    except Exception as e:
-        return {
-            "backup_count": 0,
-            "backup_files": [],
-            "total_size_mb": 0,
-            "error": str(e),
-        }
-
-
-def cleanup_backups() -> Dict[str, Any]:
-    """
-    清理备份函数
-
-    删除所有备份文件，只保留最新7份
-    """
-    try:
-        backup_dir = Path(Config.BACKUP_DIR)
-        if not backup_dir.exists():
+        backup_dir = "data/backups"
+        
+        if not os.path.exists(backup_dir):
             return {
-                "success": True,
-                "message": "备份目录不存在，无需清理",
-                "deleted_count": 0,
+                "success": False,
+                "message": f"备份目录不存在: {backup_dir}"
             }
-
-        backup_files = list(backup_dir.glob("xiaohu_jobs_backup_*.db"))
-        backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-
-        max_backups = Config.JOB_LOG_KEEP_COUNT
+        
+        # 获取所有备份文件
+        backup_files = []
+        for file in os.listdir(backup_dir):
+            if file.startswith("jobs_backup_") and file.endswith(".db"):
+                file_path = os.path.join(backup_dir, file)
+                backup_files.append((file_path, os.path.getmtime(file_path)))
+        
+        # 按修改时间排序
+        backup_files.sort(key=lambda x: x[1], reverse=True)
+        
+        # 删除多余的备份文件
         deleted_count = 0
-
-        if len(backup_files) > max_backups:
-            for old_backup in backup_files[max_backups:]:
-                try:
-                    os.remove(old_backup)
-                    deleted_count += 1
-                except Exception as e:
-                    print(f"删除旧备份文件失败: {old_backup}, 错误: {e}")
-
+        for file_path, _ in backup_files[keep_count:]:
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except Exception as e:
+                print(f"删除备份文件失败 {file_path}: {e}")
+        
         return {
             "success": True,
             "message": f"清理完成，删除了 {deleted_count} 个旧备份文件",
             "deleted_count": deleted_count,
-            "remaining_count": len(backup_files) - deleted_count,
+            "remaining_count": len(backup_files) - deleted_count
         }
-
+        
     except Exception as e:
         return {
             "success": False,
-            "message": f"清理备份失败: {str(e)}",
-            "deleted_count": 0,
+            "message": f"清理过程中发生错误: {str(e)}"
         }
+
+
+def backup_and_cleanup():
+    """
+    执行备份并清理旧文件
+    """
+    # 先执行备份
+    backup_result = backup_database()
+    
+    # 再清理旧备份
+    cleanup_result = cleanup_old_backups()
+    
+    return {
+        "backup": backup_result,
+        "cleanup": cleanup_result,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }

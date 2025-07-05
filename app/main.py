@@ -75,7 +75,7 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=200,
-        content=error_response(msg=f"参数验证错误: {exc.errors()}", code=422),
+        content=error_response(msg=f"参数验证错误: {exc.errors()}", code=404),
     )
 
 

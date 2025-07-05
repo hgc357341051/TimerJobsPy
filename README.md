@@ -1162,40 +1162,25 @@ pip install -r requirements.txt
 ### HTTP状态码
 | 状态码 | 说明 | 常见原因 |
 |--------|------|----------|
-| 200 | 成功 | 请求正常处理 |
-| 201 | 创建成功 | 任务创建成功 |
-| 400 | 请求错误 | 参数格式错误、必填字段缺失 |
-| 401 | 未授权 | 缺少认证信息 |
+| 200 | 成功 | 请求正常处理，包括任务创建、查询、更新、删除等操作 |
+| 401 | 未授权 | 缺少认证信息或认证失败 |
 | 403 | 禁止访问 | IP不在白名单、权限不足 |
-| 404 | 资源不存在 | 任务ID不存在 |
-| 409 | 冲突 | 任务名称重复 |
-| 422 | 参数验证失败 | 数据格式不正确 |
-| 500 | 服务器内部错误 | 数据库连接失败、系统异常 |
+| 404 | 资源不存在 | 任务ID不存在、接口路径错误 |
 
 ### 业务错误码
 | 错误码 | 说明 | 解决方案 |
 |--------|------|----------|
-| 1001 | 任务名称已存在 | 使用不同的任务名称 |
-| 1002 | Cron表达式格式错误 | 检查cron表达式格式 |
-| 1003 | 执行模式不支持 | 使用http/command/func之一 |
-| 1004 | 任务不存在 | 检查任务ID是否正确 |
-| 1005 | 任务正在执行中 | 等待任务执行完成 |
-| 1006 | 数据库连接失败 | 检查数据库配置 |
-| 1007 | 函数不存在 | 检查函数名是否正确 |
-| 1008 | IP地址不在白名单 | 添加IP到白名单 |
-| 1009 | 任务执行超时 | 增加超时时间或优化任务 |
-| 1010 | 系统资源不足 | 检查系统资源使用情况 |
+| 400 | 无法确定客户端IP | 检查网络连接 |
+| 403 | IP地址不被允许 | 添加IP到白名单或从黑名单移除 |
+| 404 | 业务错误（包括参数验证失败、任务不存在等） | 检查请求参数和业务逻辑 |
+| 500 | 服务器内部错误 | 检查服务器日志 |
 
 ### 错误响应格式
 ```json
 {
-  "error": {
-    "code": 1001,
-    "message": "任务名称已存在",
-    "details": "任务 'backup_task' 已存在，请使用不同的名称"
-  },
-  "timestamp": "2024-01-01T12:00:00Z",
-  "request_id": "req_123456789"
+  "code": 404,
+  "msg": "任务不存在",
+  "data": null
 }
 ```
 
@@ -1208,17 +1193,19 @@ pip install -r requirements.txt
        response = requests.post("http://localhost:8000/jobs/add", json=data)
        response.raise_for_status()
    except requests.exceptions.HTTPError as e:
-       if e.response.status_code == 409:
-           print("任务名称重复，请使用不同的名称")
-       elif e.response.status_code == 422:
-           print("参数格式错误，请检查输入")
+       if e.response.status_code == 401:
+           print("认证失败，请检查认证信息")
+       elif e.response.status_code == 403:
+           print("访问被拒绝，请检查IP白名单或权限")
+       elif e.response.status_code == 404:
+           print("资源不存在，请检查任务ID或接口路径")
        else:
            print(f"请求失败: {e}")
    ```
 
 2. **服务端错误处理**
    ```python
-   from fastapi import HTTPException
+   from app.models.base import error_response
    
    @router.post("/jobs/add")
    async def add_job(job: JobCreate):
@@ -1226,15 +1213,10 @@ pip install -r requirements.txt
            # 业务逻辑
            pass
        except JobNameExistsError:
-           raise HTTPException(
-               status_code=409,
-               detail={"code": 1001, "message": "任务名称已存在"}
-           )
+           # 业务错误通过200状态码返回，在响应体中包含错误信息
+           return error_response(code=404, msg="任务名称已存在")
        except ValidationError as e:
-           raise HTTPException(
-               status_code=422,
-               detail={"code": 1002, "message": str(e)}
-           )
+           return error_response(code=404, msg=str(e))
    ```
 
 ---

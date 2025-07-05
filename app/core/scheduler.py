@@ -31,17 +31,24 @@ def add_job_to_scheduler(job: Job) -> None:
             f"解析: {cron_parts}, 长度: {len(cron_parts)}"
         )
         if len(cron_parts) == 5:
+            # 处理特殊情况：如果日、月、周都是0，则使用默认值
+            minute = cron_parts[0]
+            hour = cron_parts[1]
+            day = cron_parts[2] if cron_parts[2] != "0" else "*"
+            month = cron_parts[3] if cron_parts[3] != "0" else "*"
+            day_of_week = cron_parts[4] if cron_parts[4] != "0" else "*"
+            
             print(
-                f"[调度器] 使用5位cron, 参数: minute={cron_parts[0]}, "
-                f"hour={cron_parts[1]}, day={cron_parts[2]}, "
-                f"month={cron_parts[3]}, day_of_week={cron_parts[4]}"
+                f"[调度器] 使用5位cron, 参数: minute={minute}, "
+                f"hour={hour}, day={day}, "
+                f"month={month}, day_of_week={day_of_week}"
             )
             trigger = CronTrigger(
-                minute=cron_parts[0],
-                hour=cron_parts[1],
-                day=cron_parts[2],
-                month=cron_parts[3],
-                day_of_week=cron_parts[4],
+                minute=minute,
+                hour=hour,
+                day=day,
+                month=month,
+                day_of_week=day_of_week,
             )
         elif len(cron_parts) == 6:
             print(

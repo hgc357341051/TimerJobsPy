@@ -111,9 +111,9 @@ async def validation_exception_handler(
     errors: List[Dict[str, Any]] = format_validation_errors(exc.errors())
 
     return JSONResponse(
-        status_code=422,
+        status_code=200,
         content={
-            "code": 422,
+            "code": 404,
             "message": "参数验证失败",
             "errors": errors,
             "request_id": getattr(request.state, "request_id", None),
@@ -130,9 +130,9 @@ async def pydantic_validation_exception_handler(
     errors: List[Dict[str, Any]] = format_validation_errors(exc.errors())
 
     return JSONResponse(
-        status_code=422,
+        status_code=200,
         content={
-            "code": 422,
+            "code": 404,
             "message": "数据验证失败",
             "errors": errors,
             "request_id": getattr(request.state, "request_id", None),
