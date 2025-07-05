@@ -21,12 +21,8 @@ class JobBase(BaseModel):
     allow_mode: int = Field(
         default=0, ge=0, le=2, description="执行模式: 0=并发, 1=串行, 2=立即执行"
     )
-    max_run_count: Optional[int] = Field(
-        None, ge=0, description="最大执行次数，0表示无限制"
-    )
-    state: int = Field(
-        default=0, ge=0, le=2, description="任务状态: 0=停止, 1=运行, 2=完成"
-    )
+    max_run_count: Optional[int] = Field(None, ge=0, description="最大执行次数，0表示无限制")
+    state: int = Field(default=0, ge=0, le=2, description="任务状态: 0=停止, 1=运行, 2=完成")
 
     @field_validator("cron_expr")
     @classmethod
@@ -87,15 +83,11 @@ class JobBase(BaseModel):
 class JobCreate(BaseModel):
     name: str = Field(..., description="任务名称")
     desc: Optional[str] = Field(None, description="任务描述")
-    cron_expr: Optional[str] = Field(
-        None, description="cron表达式，trigger_type=cron时必填"
-    )
+    cron_expr: Optional[str] = Field(None, description="cron表达式，trigger_type=cron时必填")
     trigger_type: Literal["cron", "interval"] = Field(
         "cron", description="触发器类型：cron/interval，interval为秒级调度"
     )
-    interval_seconds: Optional[int] = Field(
-        0, description="interval模式下的间隔秒数，单位秒"
-    )
+    interval_seconds: Optional[int] = Field(0, description="interval模式下的间隔秒数，单位秒")
     mode: str = Field(..., description="执行模式(function/http)")
     command: str = Field(..., description="执行命令或URL")
     allow_mode: int = Field(0, description="并发模式")
@@ -139,9 +131,7 @@ class JobUpdate(BaseModel):
     trigger_type: Optional[Literal["cron", "interval"]] = Field(
         None, description="触发器类型：cron/interval，interval为秒级调度"
     )
-    interval_seconds: Optional[int] = Field(
-        None, description="interval模式下的间隔秒数，单位秒"
-    )
+    interval_seconds: Optional[int] = Field(None, description="interval模式下的间隔秒数，单位秒")
     mode: Optional[str] = Field(None, description="执行模式")
     command: Optional[str] = Field(None, description="执行命令或URL")
     allow_mode: Optional[int] = Field(None, description="并发模式")

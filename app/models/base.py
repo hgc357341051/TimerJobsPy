@@ -1,8 +1,9 @@
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from app.config import Config
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import declarative_base
+
+from app.config import Config
 
 Base = declarative_base()
 

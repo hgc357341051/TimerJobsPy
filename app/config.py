@@ -73,9 +73,7 @@ class Config:
     SERVICE_DISPLAY_NAME: Final[str] = os.getenv(
         "SERVICE_DISPLAY_NAME", "小胡专用定时任务系统QQ357341051"
     )
-    SERVICE_DESCRIPTION: Final[str] = os.getenv(
-        "SERVICE_DESCRIPTION", "小胡专用跨平台任务调度服务"
-    )
+    SERVICE_DESCRIPTION: Final[str] = os.getenv("SERVICE_DESCRIPTION", "小胡专用跨平台任务调度服务")
 
     # 守护进程配置
     DAEMON_MAX_RESTARTS: Final[int] = int(os.getenv("DAEMON_MAX_RESTARTS", "10"))
@@ -105,9 +103,7 @@ class Config:
 
     # API配置
     API_TITLE: Final[str] = os.getenv("API_TITLE", "小胡定时任务系统API")
-    API_DESCRIPTION: Final[str] = os.getenv(
-        "API_DESCRIPTION", "小胡专用跨平台任务调度系统API文档"
-    )
+    API_DESCRIPTION: Final[str] = os.getenv("API_DESCRIPTION", "小胡专用跨平台任务调度系统API文档")
     API_VERSION: Final[str] = os.getenv("API_VERSION", "1.0.0")
     API_DOCS_URL: Final[str] = os.getenv("API_DOCS_URL", "/docs")
     API_REDOC_URL: Final[str] = os.getenv("API_REDOC_URL", "/redoc")

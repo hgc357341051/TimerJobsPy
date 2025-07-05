@@ -3,6 +3,9 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
 from app.config import Config
 from app.core.scheduler import add_job_to_scheduler, remove_job, run_job, scheduler
 from app.deps import get_db
@@ -11,8 +14,6 @@ from app.middlewares.ip_control import ip_control
 from app.models.base import error_response, paginated_response, success_response
 from app.models.job import Job
 from app.models.schemas import JobCreate, JobResponse, JobUpdate
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/jobs", tags=["任务管理"])
 
@@ -158,9 +159,7 @@ def job_detail(
     job = db.query(Job).filter(Job.id == id).first()
     if not job:
         return error_response(code=404, msg="任务不存在")
-    return success_response(
-        data=JobResponse.model_validate(job), msg="获取任务详情成功"
-    )
+    return success_response(data=JobResponse.model_validate(job), msg="获取任务详情成功")
 
 
 # 手动运行
@@ -432,9 +431,7 @@ def get_job_logs_from_file(
     response_description="系统日志内容",
     status_code=200,
 )
-def zap_logs(
-    n: int = Query(100, description="读取行数", ge=1, le=1000)
-) -> Dict[str, Any]:
+def zap_logs(n: int = Query(100, description="读取行数", ge=1, le=1000)) -> Dict[str, Any]:
     """
     获取系统日志
 

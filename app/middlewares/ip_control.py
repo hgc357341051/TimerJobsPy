@@ -1,9 +1,10 @@
 import threading
 from typing import Any, Callable, Optional
 
-from app.config import Config
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.config import Config
 
 
 class IPControl:

@@ -166,9 +166,7 @@ def validate_required_fields(data: Dict[str, Any], required_fields: list[str]) -
 def validate_field_type(data: Dict[str, Any], field: str, expected_type: type) -> None:
     """验证字段类型"""
     if field in data and not isinstance(data[field], expected_type):
-        raise HTTPException(
-            400, f"字段 {field} 类型错误，期望 {expected_type.__name__}"
-        )
+        raise HTTPException(400, f"字段 {field} 类型错误，期望 {expected_type.__name__}")
 
 
 def validate_string_length(data: Dict[str, Any], field: str, max_length: int) -> None:
@@ -189,9 +187,7 @@ def validate_enum_value(
 ) -> None:
     """验证枚举值"""
     if field in data and data[field] not in allowed_values:
-        raise HTTPException(
-            400, f"字段 {field} 值无效，允许的值: {', '.join(allowed_values)}"
-        )
+        raise HTTPException(400, f"字段 {field} 值无效，允许的值: {', '.join(allowed_values)}")
 
 
 def validate_cron_expression(cron_expr: str) -> None:

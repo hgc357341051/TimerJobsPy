@@ -8,14 +8,15 @@ import tempfile
 from typing import Any, Generator
 
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
 from app.deps import get_db
 from app.main import app
 from app.models.admin import Admin
 from app.models.base import Base
 from app.models.job import Job
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
 
 
 @pytest.fixture(scope="session")

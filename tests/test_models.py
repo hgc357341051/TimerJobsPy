@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 import pytest
+
 from app.models.admin import Admin
 from app.models.job import Job
 from app.models.log import JobExecLog
@@ -41,9 +42,7 @@ class TestJobModel:
 
     def test_job_default_values(self, db_session: Any) -> None:
         """测试任务默认值"""
-        job = Job(
-            name="默认值测试", cron_expr="0 0 * * *", command="https://example.com"
-        )
+        job = Job(name="默认值测试", cron_expr="0 0 * * *", command="https://example.com")
         db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
@@ -64,9 +63,7 @@ class TestJobModel:
     def test_job_relationships(self, db_session: Any) -> None:
         """测试任务关联关系"""
         # 创建任务
-        job = Job(
-            name="关联测试任务", cron_expr="0 0 * * *", command="https://example.com"
-        )
+        job = Job(name="关联测试任务", cron_expr="0 0 * * *", command="https://example.com")
         db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
@@ -91,9 +88,7 @@ class TestJobModel:
 
     def test_job_state_transitions(self, db_session: Any) -> None:
         """测试任务状态转换"""
-        job = Job(
-            name="状态测试任务", cron_expr="0 0 * * *", command="https://example.com"
-        )
+        job = Job(name="状态测试任务", cron_expr="0 0 * * *", command="https://example.com")
         db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
@@ -395,9 +390,7 @@ class TestModelRelationships:
     def test_job_logs_relationship(self, db_session: Any) -> None:
         """测试任务与日志的关联关系"""
         # 创建任务
-        job = Job(
-            name="关联测试任务", cron_expr="0 0 * * *", command="https://example.com"
-        )
+        job = Job(name="关联测试任务", cron_expr="0 0 * * *", command="https://example.com")
         db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
@@ -428,9 +421,7 @@ class TestModelRelationships:
     def test_job_logs_cascade_delete(self, db_session: Any) -> None:
         """测试任务删除时级联删除日志"""
         # 创建任务和日志
-        job = Job(
-            name="级联删除测试", cron_expr="0 0 * * *", command="https://example.com"
-        )
+        job = Job(name="级联删除测试", cron_expr="0 0 * * *", command="https://example.com")
         db_session.add(job)
         db_session.commit()
         db_session.refresh(job)

@@ -1,9 +1,13 @@
 import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, get_table_name
-from sqlalchemy import DateTime, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+
+if TYPE_CHECKING:
+    from app.models.log import JobExecLog
 
 
 class Job(Base):
@@ -21,9 +25,7 @@ class Job(Base):
     command: Mapped[str] = mapped_column(Text, nullable=False, comment="执行命令或URL")
     state: Mapped[int] = mapped_column(Integer, default=0, comment="任务状态")
     allow_mode: Mapped[int] = mapped_column(Integer, default=0, comment="执行模式")
-    max_run_count: Mapped[int] = mapped_column(
-        Integer, default=0, comment="最大执行次数"
-    )
+    max_run_count: Mapped[int] = mapped_column(Integer, default=0, comment="最大执行次数")
     run_count: Mapped[int] = mapped_column(Integer, default=0, comment="已执行次数")
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow, comment="创建时间"
@@ -41,4 +43,9 @@ class Job(Base):
     )
     interval_seconds: Mapped[int] = mapped_column(
         Integer, default=0, comment="interval模式下的间隔秒数，单位秒"
+    )
+
+    # 关系
+    logs: Mapped[list["JobExecLog"]] = relationship(
+        "JobExecLog", back_populates="job", cascade="all, delete-orphan"
     )

@@ -1,9 +1,10 @@
 import datetime
 from typing import Optional
 
-from app.models.base import Base, get_table_name
 from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base, get_table_name
 
 
 class Admin(Base):

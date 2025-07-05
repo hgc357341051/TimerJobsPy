@@ -1,13 +1,14 @@
 import threading
 from typing import Any
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+
 from app.config import Config
 from app.core.runner import run_job
 from app.deps import SessionLocal
 from app.models.job import Job
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 
 scheduler = BackgroundScheduler(
     job_defaults=Config.SCHEDULER_JOB_DEFAULTS,
@@ -25,9 +26,16 @@ def add_job_to_scheduler(job: Job) -> None:
         trigger = IntervalTrigger(seconds=job.interval_seconds)
     elif getattr(job, "trigger_type", "cron") == "cron":
         cron_parts = job.cron_expr.split()
-        print(f"[调度器] 收到cron表达式: {job.cron_expr}, 解析: {cron_parts}, 长度: {len(cron_parts)}")
+        print(
+            f"[调度器] 收到cron表达式: {job.cron_expr}, "
+            f"解析: {cron_parts}, 长度: {len(cron_parts)}"
+        )
         if len(cron_parts) == 5:
-            print(f"[调度器] 使用5位cron, 参数: minute={cron_parts[0]}, hour={cron_parts[1]}, day={cron_parts[2]}, month={cron_parts[3]}, day_of_week={cron_parts[4]}")
+            print(
+                f"[调度器] 使用5位cron, 参数: minute={cron_parts[0]}, "
+                f"hour={cron_parts[1]}, day={cron_parts[2]}, "
+                f"month={cron_parts[3]}, day_of_week={cron_parts[4]}"
+            )
             trigger = CronTrigger(
                 minute=cron_parts[0],
                 hour=cron_parts[1],
@@ -36,7 +44,12 @@ def add_job_to_scheduler(job: Job) -> None:
                 day_of_week=cron_parts[4],
             )
         elif len(cron_parts) == 6:
-            print(f"[调度器] 使用6位cron, 参数: second={cron_parts[0]}, minute={cron_parts[1]}, hour={cron_parts[2]}, day={cron_parts[3]}, month={cron_parts[4]}, day_of_week={cron_parts[5]}")
+            print(
+                f"[调度器] 使用6位cron, 参数: second={cron_parts[0]}, "
+                f"minute={cron_parts[1]}, hour={cron_parts[2]}, "
+                f"day={cron_parts[3]}, month={cron_parts[4]}, "
+                f"day_of_week={cron_parts[5]}"
+            )
             trigger = CronTrigger(
                 second=cron_parts[0],
                 minute=cron_parts[1],

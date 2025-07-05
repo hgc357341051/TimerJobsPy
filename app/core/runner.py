@@ -5,9 +5,10 @@ from datetime import datetime
 from typing import Any, Dict
 
 import requests
+
 from app.core.job_logger import JobLogger
 from app.deps import SessionLocal
-from app.function.registry import get_function, FUNC_REGISTRY
+from app.function.registry import get_function
 from app.models.job import Job
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,6 @@ def run_job(job_id: int) -> None:
 
 def run_command_job(job: Job, job_logger: JobLogger) -> str:
     """执行命令任务"""
-    start_time = time.time()
     try:
         config = parse_command_config(job.command)
         command = config.get("command", "")
@@ -95,18 +95,14 @@ def run_command_job(job: Job, job_logger: JobLogger) -> str:
         result = subprocess.run(
             command, shell=True, capture_output=True, text=True, timeout=timeout
         )
-        end_time = time.time()
-        duration = end_time - start_time
         if result.returncode != 0:
-            raise Exception(
-                f"命令执行失败，退出码: {result.returncode}, 错误: {result.stderr}"
-            )
-        return result.stdout.strip() if result.stdout else f"exit_code={result.returncode}"
+            raise Exception(f"命令执行失败，退出码: {result.returncode}, 错误: {result.stderr}")
+        return (
+            result.stdout.strip() if result.stdout else f"exit_code={result.returncode}"
+        )
     except subprocess.TimeoutExpired:
-        duration = time.time() - start_time
         raise Exception(f"命令执行超时，超时时间: {timeout}秒")
-    except Exception as e:
-        duration = time.time() - start_time
+    except Exception:
         raise
 
 
@@ -124,24 +120,22 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
         proxy_used = None
         if proxy:
             if proxy.startswith("socks5://") or proxy.startswith("socks5h://"):
-                proxies = {
-                    "http": proxy,
-                    "https": proxy
-                }
+                proxies = {"http": proxy, "https": proxy}
                 proxy_used = proxy
             elif proxy.startswith("http://") or proxy.startswith("https://"):
-                proxies = {
-                    "http": proxy,
-                    "https": proxy
-                }
+                proxies = {"http": proxy, "https": proxy}
                 proxy_used = proxy
         try:
             response = requests.request(
-                method=method, url=url, headers=headers, timeout=timeout, proxies=proxies
+                method=method,
+                url=url,
+                headers=headers,
+                timeout=timeout,
+                proxies=proxies,
             )
             status_code = response.status_code
             resp_text = response.text.strip()
-            success = status_code < 400 and resp_text != ''
+            success = status_code < 400 and resp_text != ""
         except Exception as e:
             status_code = None
             resp_text = str(e)
@@ -156,7 +150,7 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             f"response: {resp_text}",
             f"status_code: {status_code}",
             f"success: {success}",
-            f"duration: {round(duration, 3)}s"
+            f"duration: {round(duration, 3)}s",
         ]
         result_text = "\n".join(result_lines)
         return {
@@ -167,7 +161,7 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             "status_code": status_code,
             "success": success,
             "http_duration": round(duration, 3),
-            "result": result_text
+            "result": result_text,
         }
     except Exception as e:
         duration = time.time() - start_time
@@ -176,9 +170,9 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             f"proxy: {proxy_used or 'none'}",
             f"method: {method}",
             f"response: {str(e)}",
-            f"status_code: none",
-            f"success: false",
-            f"duration: {round(duration, 3)}s"
+            "status_code: none",
+            "success: false",
+            f"duration: {round(duration, 3)}s",
         ]
         result_text = "\n".join(result_lines)
         return {
@@ -189,7 +183,7 @@ def run_http_job(job: Job, job_logger: JobLogger) -> dict:
             "status_code": None,
             "success": False,
             "http_duration": round(duration, 3),
-            "result": result_text
+            "result": result_text,
         }
 
 
@@ -208,6 +202,7 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
         duration = end_time - start_time
         # 格式化result为纯文本
         import json as _json
+
         try:
             result_text = _json.dumps(result, ensure_ascii=False)
         except Exception:
@@ -216,10 +211,9 @@ def run_function_job(job: Job, job_logger: JobLogger) -> dict:
             "func_name": func_name,
             "func_args": args,
             "func_duration": round(duration, 3),
-            "result": result_text
+            "result": result_text,
         }
-    except Exception as e:
-        duration = time.time() - start_time
+    except Exception:
         raise
 
 

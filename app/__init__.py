@@ -1,14 +1,15 @@
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Dict
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+
 from app.api.jobs import router as jobs_router
 from app.config import Config
 from app.core.job_logger import close_all_job_loggers
 from app.core.scheduler import scheduler
 from app.middlewares.ip_control import IPControlMiddleware
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 
 
 @asynccontextmanager

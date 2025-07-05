@@ -7,7 +7,35 @@
 import sys
 import subprocess
 import argparse
+import os
 from pathlib import Path
+
+
+def get_python_executable():
+    """获取Python可执行文件路径，优先使用虚拟环境"""
+    # 检查是否在虚拟环境中
+    if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        # 在虚拟环境中
+        return sys.executable
+    
+    # 检查项目根目录下是否有虚拟环境
+    project_root = Path(__file__).parent
+    venv_python = project_root / "venv" / "Scripts" / "python.exe"
+    
+    if venv_python.exists():
+        return str(venv_python)
+    
+    # 检查Unix风格的虚拟环境
+    venv_python_unix = project_root / "venv" / "bin" / "python"
+    if venv_python_unix.exists():
+        return str(venv_python_unix)
+    
+    # 回退到系统Python
+    return sys.executable
+
+
+# 获取Python可执行文件路径
+PYTHON_EXECUTABLE = get_python_executable()
 
 
 def run_command(cmd, description=""):
@@ -39,7 +67,7 @@ def install_test_deps():
     """安装测试依赖"""
     print("📦 安装测试依赖...")
     return run_command(
-        [sys.executable, "-m", "pip", "install", "-r", "requirements-test.txt"],
+        [PYTHON_EXECUTABLE, "-m", "pip", "install", "-r", "requirements-test.txt"],
         "安装测试依赖",
     )
 
@@ -48,7 +76,7 @@ def run_unit_tests():
     """运行单元测试"""
     print("🧪 运行单元测试...")
     return run_command(
-        [sys.executable, "-m", "pytest", "tests/", "-m", "unit", "-v"], "单元测试"
+        [PYTHON_EXECUTABLE, "-m", "pytest", "tests/", "-m", "unit", "-v"], "单元测试"
     )
 
 
@@ -56,7 +84,7 @@ def run_api_tests():
     """运行API测试"""
     print("🌐 运行API测试...")
     return run_command(
-        [sys.executable, "-m", "pytest", "tests/test_api.py", "-v"], "API测试"
+        [PYTHON_EXECUTABLE, "-m", "pytest", "tests/test_api.py", "-v"], "API测试"
     )
 
 
@@ -64,15 +92,15 @@ def run_model_tests():
     """运行模型测试"""
     print("📊 运行模型测试...")
     return run_command(
-        [sys.executable, "-m", "pytest", "tests/test_models.py", "-v"], "模型测试"
+        [PYTHON_EXECUTABLE, "-m", "pytest", "tests/test_models.py", "-v"], "模型测试"
     )
 
 
 def run_core_tests():
-    """运行核心功能测试"""
+    """运行核心功能测试..."""
     print("⚙️ 运行核心功能测试...")
     return run_command(
-        [sys.executable, "-m", "pytest", "tests/test_core.py", "-v"], "核心功能测试"
+        [PYTHON_EXECUTABLE, "-m", "pytest", "tests/test_core.py", "-v"], "核心功能测试"
     )
 
 
