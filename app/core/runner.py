@@ -16,74 +16,80 @@ logger = logging.getLogger(__name__)
 
 def run_job(job_id: int) -> None:
     """执行任务"""
-    db = SessionLocal()
     log_detail = {}
-    try:
-        job = db.query(Job).filter(Job.id == job_id).first()
-        if not job:
-            logger.error(f"任务 {job_id} 不存在")
-            return
-        # 检查任务状态
-        if job.state != 1:
-            logger.info(f"任务 {job_id} 状态为 {job.state}，跳过执行")
-            return
-
-        # 检查执行次数限制
-        if job.max_run_count > 0 and job.run_count >= job.max_run_count:
-            logger.info(f"任务 {job_id} 已达到最大执行次数 {job.max_run_count}")
-            return
-
-        # 创建任务日志管理器
-        job_logger = JobLogger(job_id=job.id, job_name=job.name)
-
-        start_time = time.time()
-        success = False
-        error_msg = None
-
+    job_logger = None
+    
+    # 使用上下文管理器自动关闭数据库连接
+    with SessionLocal() as db:
         try:
-            if job.mode == "function":
-                log_detail = run_function_job(job, job_logger)
-            elif job.mode == "http":
-                log_detail = run_http_job(job, job_logger)
-            else:
-                log_detail = {"result": run_command_job(job, job_logger)}
-            success = True
-            logger.info(f"任务 {job_id} 执行成功")
+            job = db.query(Job).filter(Job.id == job_id).first()
+            if not job:
+                logger.error(f"任务 {job_id} 不存在")
+                return
+                
+            # 检查任务状态
+            if job.state != 1:
+                logger.info(f"任务 {job_id} 状态为 {job.state}，跳过执行")
+                return
+
+            # 检查执行次数限制
+            if job.max_run_count > 0 and job.run_count >= job.max_run_count:
+                logger.info(f"任务 {job_id} 已达到最大执行次数 {job.max_run_count}")
+                return
+
+            # 创建任务日志管理器
+            job_logger = JobLogger(job_id=job.id, job_name=job.name)
+
+            start_time = time.time()
+            success = False
+            error_msg = None
+
+            try:
+                if job.mode == "function":
+                    log_detail = run_function_job(job, job_logger)
+                elif job.mode == "http":
+                    log_detail = run_http_job(job, job_logger)
+                else:
+                    log_detail = {"result": run_command_job(job, job_logger)}
+                success = True
+                logger.info(f"任务 {job_id} 执行成功")
+
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"任务 {job_id} 执行失败: {e}")
+
+            finally:
+                end_time = time.time()
+                duration = end_time - start_time
+
+                summary_log = {
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                    "job_id": job.id,
+                    "job_name": job.name,
+                    "status": "成功" if success else "失败",
+                    "duration_ms": int(duration * 1000),
+                    "mode": job.mode,
+                    "command": job.command,
+                    "error_msg": error_msg,
+                }
+                # 合并详细信息（包含result字段）
+                if log_detail and isinstance(log_detail, dict):
+                    summary_log.update(log_detail)
+                
+                if job_logger:
+                    job_logger.write_text_log(summary_log)
+
+                # 更新任务执行次数
+                job.run_count += 1
+                db.commit()
 
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"任务 {job_id} 执行失败: {e}")
-
+            logger.error(f"执行任务 {job_id} 时发生错误: {e}")
+        
         finally:
-            end_time = time.time()
-            duration = end_time - start_time
-
-            summary_log = {
-                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
-                "job_id": job.id,
-                "job_name": job.name,
-                "status": "成功" if success else "失败",
-                "duration_ms": int(duration * 1000),
-                "mode": job.mode,
-                "command": job.command,
-                "error_msg": error_msg,
-            }
-            # 合并详细信息（包含result字段）
-            if log_detail and isinstance(log_detail, dict):
-                summary_log.update(log_detail)
-            job_logger.write_text_log(summary_log)
-
-            # 更新任务执行次数
-            job.run_count += 1
-            db.commit()
-
-            # 关闭日志文件句柄
-            job_logger.close_all_handles()
-
-    except Exception as e:
-        logger.error(f"执行任务 {job_id} 时发生错误: {e}")
-    finally:
-        db.close()
+            # 确保关闭日志文件句柄
+            if job_logger:
+                job_logger.close_all_handles()
 
 
 def run_command_job(job: Job, job_logger: JobLogger) -> str:

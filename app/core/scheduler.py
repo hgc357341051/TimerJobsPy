@@ -23,64 +23,83 @@ scheduler_lock = threading.Lock()
 
 def add_job_to_scheduler(job: Job) -> None:
     """添加任务到调度器，支持cron和interval"""
-    if (
-        getattr(job, "trigger_type", "cron") == "interval"
-        and getattr(job, "interval_seconds", 0) > 0
-    ):
-        trigger = IntervalTrigger(seconds=job.interval_seconds)
-    elif getattr(job, "trigger_type", "cron") == "cron":
-        cron_parts = job.cron_expr.split()
-        logger.debug(
-            f"收到cron表达式: {job.cron_expr}, " f"解析: {cron_parts}, 长度: {len(cron_parts)}"
-        )
-        if len(cron_parts) == 5:
-            # 处理特殊情况：如果日、月、周都是0，则使用默认值
-            minute = cron_parts[0]
-            hour = cron_parts[1]
-            day = cron_parts[2] if cron_parts[2] != "0" else "*"
-            month = cron_parts[3] if cron_parts[3] != "0" else "*"
-            day_of_week = cron_parts[4] if cron_parts[4] != "0" else "*"
+    # 使用线程锁确保调度器操作的线程安全
+    with scheduler_lock:
+        try:
+            # 检查任务是否有效
+            if not job or job.state == 2:  # 状态为2表示停止
+                logger.debug(f"任务 {getattr(job, 'id', 'unknown')} 无效或已停止，不添加到调度器")
+                return
+                
+            # 根据触发器类型创建触发器
+            if (
+                getattr(job, "trigger_type", "cron") == "interval"
+                and getattr(job, "interval_seconds", 0) > 0
+            ):
+                trigger = IntervalTrigger(seconds=job.interval_seconds)
+            elif getattr(job, "trigger_type", "cron") == "cron":
+                cron_parts = job.cron_expr.split()
+                logger.debug(
+                    f"收到cron表达式: {job.cron_expr}, " f"解析: {cron_parts}, 长度: {len(cron_parts)}"
+                )
+                if len(cron_parts) == 5:
+                    # 处理特殊情况：如果日、月、周都是0，则使用默认值
+                    minute = cron_parts[0]
+                    hour = cron_parts[1]
+                    day = cron_parts[2] if cron_parts[2] != "0" else "*"
+                    month = cron_parts[3] if cron_parts[3] != "0" else "*"
+                    day_of_week = cron_parts[4] if cron_parts[4] != "0" else "*"
 
-            logger.debug(
-                f"使用5位cron, 参数: minute={minute}, "
-                f"hour={hour}, day={day}, "
-                f"month={month}, day_of_week={day_of_week}"
+                    logger.debug(
+                        f"使用5位cron, 参数: minute={minute}, "
+                        f"hour={hour}, day={day}, "
+                        f"month={month}, day_of_week={day_of_week}"
+                    )
+                    trigger = CronTrigger(
+                        minute=minute,
+                        hour=hour,
+                        day=day,
+                        month=month,
+                        day_of_week=day_of_week,
+                    )
+                elif len(cron_parts) == 6:
+                    logger.debug(
+                        f"使用6位cron, 参数: second={cron_parts[0]}, "
+                        f"minute={cron_parts[1]}, hour={cron_parts[2]}, "
+                        f"day={cron_parts[3]}, month={cron_parts[4]}, "
+                        f"day_of_week={cron_parts[5]}"
+                    )
+                    trigger = CronTrigger(
+                        second=cron_parts[0],
+                        minute=cron_parts[1],
+                        hour=cron_parts[2],
+                        day=cron_parts[3],
+                        month=cron_parts[4],
+                        day_of_week=cron_parts[5],
+                    )
+                else:
+                    logger.error(f"无效的cron表达式: {job.cron_expr}")
+                    return
+            else:
+                logger.error("无效的trigger_type或参数")
+                return
+                
+            # 确保调度器正在运行
+            if not scheduler.running:
+                logger.warning("调度器未运行，正在启动...")
+                scheduler.start()
+                
+            # 添加任务到调度器
+            scheduler.add_job(
+                run_job, trigger, args=[job.id], id=str(job.id), replace_existing=True
             )
-            trigger = CronTrigger(
-                minute=minute,
-                hour=hour,
-                day=day,
-                month=month,
-                day_of_week=day_of_week,
-            )
-        elif len(cron_parts) == 6:
-            logger.debug(
-                f"使用6位cron, 参数: second={cron_parts[0]}, "
-                f"minute={cron_parts[1]}, hour={cron_parts[2]}, "
-                f"day={cron_parts[3]}, month={cron_parts[4]}, "
-                f"day_of_week={cron_parts[5]}"
-            )
-            trigger = CronTrigger(
-                second=cron_parts[0],
-                minute=cron_parts[1],
-                hour=cron_parts[2],
-                day=cron_parts[3],
-                month=cron_parts[4],
-                day_of_week=cron_parts[5],
-            )
-        else:
-            logger.error(f"无效的cron表达式: {job.cron_expr}")
-            return
-    else:
-        logger.error("无效的trigger_type或参数")
-        return
-    try:
-        scheduler.add_job(
-            run_job, trigger, args=[job.id], id=str(job.id), replace_existing=True
-        )
-        logger.info(f"任务 {job.name} (ID: {job.id}) 已添加到调度器")
-    except Exception as e:
-        logger.error(f"添加任务到调度器失败: {e}")
+            logger.info(f"任务 {job.name} (ID: {job.id}) 已添加到调度器")
+            
+        except Exception as e:
+            logger.error(f"添加任务到调度器失败: {e}")
+            # 记录更详细的错误信息以便调试
+            import traceback
+            logger.debug(f"错误详情: {traceback.format_exc()}")
 
 
 def remove_job(job_id: int) -> None:

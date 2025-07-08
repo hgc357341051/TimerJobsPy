@@ -1,5 +1,8 @@
 import json
+import logging
 import os
+import threading
+import time
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -67,11 +70,30 @@ def edit_job(
     db_job = db.query(Job).filter(Job.id == id).first()
     if not db_job:
         return error_response(code=404, msg="任务不存在")
-    for k, v in job.model_dump(exclude_unset=True).items():
+    
+    # 检查是否更新了调度相关的字段
+    update_scheduler = False
+    scheduler_fields = {"cron_expr", "state", "command", "mode", "allow_mode"}
+    
+    # 获取更新的字段
+    update_data = job.model_dump(exclude_unset=True)
+    
+    # 检查是否有调度相关字段被更新
+    for field in scheduler_fields:
+        if field in update_data and getattr(db_job, field) != update_data[field]:
+            update_scheduler = True
+            break
+    
+    # 更新数据库中的任务
+    for k, v in update_data.items():
         setattr(db_job, k, v)
     db.commit()
     db.refresh(db_job)
-    add_job_to_scheduler(db_job)
+    
+    # 只有在调度相关字段变更时才更新调度器
+    if update_scheduler and db_job.state != 2:  # 不是停止状态才更新调度器
+        add_job_to_scheduler(db_job)
+        
     return success_response(msg="任务更新成功")
 
 
@@ -181,7 +203,12 @@ def run_job_api(
     job = db.query(Job).filter(Job.id == id).first()
     if not job:
         return error_response(code=404, msg="任务不存在")
-    run_job(job.id)
+    
+    # 使用线程异步执行任务
+    thread = threading.Thread(target=run_job, args=(job.id,))
+    thread.daemon = True
+    thread.start()
+    
     return success_response(msg="任务已手动触发")
 
 
@@ -219,18 +246,29 @@ def stop_job(
     status_code=200,
 )
 def restart_job(
-    id: int = Query(..., description="任务ID", ge=1), db: Session = Depends(get_db)
+    id: int = Query(..., description="任务ID", ge=1),
+    reset_run_count: bool = Query(False, description="是否重置执行次数"),
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     重启任务
 
     - **id**: 任务ID（查询参数）
+    - **reset_run_count**: 是否重置执行次数（可选，默认False）
     """
     job = db.query(Job).filter(Job.id == id).first()
     if not job:
         return error_response(code=404, msg="任务不存在")
-    setattr(job, "state", 1)  # 设为运行中
+    
+    # 设为运行中
+    setattr(job, "state", 1)
+    
+    # 根据参数决定是否重置执行次数
+    if reset_run_count:
+        setattr(job, "run_count", 0)
+    
     db.commit()
+    db.refresh(job)
     add_job_to_scheduler(job)
     return success_response(msg="任务已重启")
 
@@ -250,8 +288,13 @@ def run_all_jobs(db: Session = Depends(get_db)) -> Dict[str, Any]:
     手动触发所有可运行的任务（状态为0或1的任务）
     """
     jobs = db.query(Job).filter(Job.state.in_([0, 1])).all()
+    
+    # 使用线程异步执行所有任务
     for job in jobs:
-        run_job(job.id)
+        thread = threading.Thread(target=run_job, args=(job.id,))
+        thread.daemon = True
+        thread.start()
+        
     return success_response(msg="所有任务已手动触发")
 
 
@@ -694,73 +737,63 @@ def add_and_run_job(
         db.commit()
         db.refresh(db_job)
 
-        # 异步执行任务，避免阻塞请求
-        import threading
-        import time
-
+        # 异步执行任务
         def execute_and_cleanup() -> None:
             try:
                 # 执行任务
                 run_job(db_job.id)
 
-                # 等待任务执行完成（给一点时间）
+                # 给任务一些执行时间
                 time.sleep(1)
 
-                # 根据参数决定是否删除任务
-                if remove_task:
-                    with SessionLocal() as cleanup_db:
-                        cleanup_job = (
-                            cleanup_db.query(Job).filter(Job.id == db_job.id).first()
-                        )
+                # 使用新的数据库会话处理清理工作
+                with SessionLocal() as cleanup_db:
+                    # 根据参数决定是否删除任务
+                    if remove_task:
+                        cleanup_job = cleanup_db.query(Job).filter(Job.id == db_job.id).first()
                         if cleanup_job:
                             cleanup_db.delete(cleanup_job)
                             cleanup_db.commit()
-                        # addAndRun创建的任务不在调度器中，不需要remove_job
-                        pass
-                else:
-                    # 执行完毕后停止任务，防止重复执行
-                    with SessionLocal() as cleanup_db:
-                        cleanup_job = (
-                            cleanup_db.query(Job).filter(Job.id == db_job.id).first()
-                        )
+                    else:
+                        # 如果不删除任务，则将其设置为停止状态
+                        cleanup_job = cleanup_db.query(Job).filter(Job.id == db_job.id).first()
                         if cleanup_job:
                             cleanup_job.state = 2  # 设置为停止状态
                             cleanup_db.commit()
-                        # addAndRun创建的任务不在调度器中，不需要remove_job
-                        pass
 
                 # 根据参数决定是否删除日志
                 if remove_log:
-                    log_path = f"data/logs/{db_job.id}.log"
+                    # 获取正确的日志路径
+                    year_month = datetime.now().strftime("%Y%m")
+                    day = datetime.now().strftime("%d")
+                    log_dir = f"runtime/jobs/{db_job.id}/{year_month}"
+                    log_path = f"{log_dir}/{day}.log"
                     if os.path.exists(log_path):
                         os.remove(log_path)
 
-            except Exception:
-                # 异步任务执行失败，记录到日志
-                pass
+            except Exception as e:
+                logging.error(f"执行任务或清理失败: {str(e)}")
 
         # 启动异步线程
-        cleanup_thread = threading.Thread(target=execute_and_cleanup)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
+        thread = threading.Thread(target=execute_and_cleanup)
+        thread.daemon = True
+        thread.start()
 
-        # 立即返回响应，不等待任务执行完成
-        task_msg = "任务已启动（异步执行）"
-        log_msg = "日志将根据参数处理"
-
+        # 立即返回响应
         return success_response(
-            data={"job_id": db_job.id, "task_status": task_msg, "log_status": log_msg},
-            msg="任务执行完成",
+            data={"job_id": db_job.id},
+            msg="任务已启动（异步执行）",
         )
 
     except Exception as e:
-        # 如果执行失败，根据参数决定是否删除任务
-        if "db_job" in locals() and remove_task:
-            db.delete(db_job)
-            db.commit()
-            remove_job(db_job.id)
-
-        return error_response(code=404, msg=f"任务执行失败: {str(e)}")
+        # 如果创建任务失败，回滚
+        if "db_job" in locals() and db_job.id:
+            try:
+                db.delete(db_job)
+                db.commit()
+            except:
+                pass
+        return error_response(code=500, msg=f"任务创建失败: {str(e)}")
 
 
 # 创建日志清理任务

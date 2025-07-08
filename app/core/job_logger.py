@@ -15,6 +15,12 @@ class JobLogger:
         self._file_handles: Dict[str, Any] = {}
         self._file_mutex = threading.RLock()
         self._write_mutex = threading.Lock()
+        
+        # 确保基础日志目录存在
+        try:
+            Path("runtime/jobs").mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"创建基础日志目录失败: {e}")
 
     def _get_log_path(self) -> str:
         """获取日志文件路径"""
@@ -36,13 +42,24 @@ class JobLogger:
 
     def _get_file_handle(self, log_path: str) -> Any:
         """获取文件句柄（带缓存）"""
+        if not log_path:
+            return None
+            
         # 先尝试从缓存获取
         with self._file_mutex:
-            if log_path in self._file_handles:
-                return self._file_handles[log_path]
-
-            # 缓存中没有，创建新文件句柄
+            if log_path in self._file_handles and self._file_handles[log_path]:
+                # 检查文件句柄是否有效
+                try:
+                    if not self._file_handles[log_path].closed:
+                        return self._file_handles[log_path]
+                except:
+                    pass  # 如果检查失败，将重新创建句柄
+                    
+            # 缓存中没有有效句柄，创建新文件句柄
             try:
+                # 确保父目录存在
+                os.makedirs(os.path.dirname(log_path), exist_ok=True)
+                
                 file_handle = open(log_path, "a", encoding="utf-8", buffering=1)
                 self._file_handles[log_path] = file_handle
                 return file_handle
@@ -214,20 +231,22 @@ class JobLogger:
         if not log_path:
             return
 
-        # 构建JSON日志数据
+        # 构建JSON日志数据，使用get方法避免KeyError
         json_log = {
-            "time": log_data.get("time")
-            or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "job_id": log_data.get("job_id", ""),
-            "job_name": log_data.get("job_name", ""),
+            "time": log_data.get("time", datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]),
+            "job_id": log_data.get("job_id", self.job_id),
+            "job_name": log_data.get("job_name", self.job_name),
             "status": log_data.get("status", ""),
             "duration_ms": log_data.get("duration_ms", 0),
             "mode": log_data.get("mode", ""),
             "command": log_data.get("command", ""),
-            "output": log_data.get("result", "")  # 使用result字段作为输出
-            or log_data.get("stdout", "")
-            or log_data.get("func_result", "")
-            or log_data.get("http_resp", ""),
+            # 使用result字段作为输出，如果不存在则尝试其他字段
+            "output": (
+                log_data.get("result", "") 
+                or log_data.get("stdout", "") 
+                or log_data.get("func_result", "") 
+                or log_data.get("http_resp", "")
+            ),
             "error_msg": log_data.get("error_msg", ""),
             "exit_code": log_data.get("exit_code", 0),
             "http_status": log_data.get("http_status", 0),
@@ -235,25 +254,38 @@ class JobLogger:
             "func_args": log_data.get("func_args", ""),
         }
 
-        # 写入JSON格式日志
-        try:
-            log_line = json.dumps(json_log, ensure_ascii=False) + "\n"
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(log_line)
-                f.flush()
-                os.fsync(f.fileno())
-        except Exception as e:
-            print(f"写入JSON日志失败: {e}")
+        # 获取文件句柄
+        file_handle = self._get_file_handle(log_path)
+        if not file_handle:
+            return
+
+        # 使用互斥锁确保写入原子性
+        with self._write_mutex:
+            try:
+                log_line = json.dumps(json_log, ensure_ascii=False) + "\n"
+                file_handle.write(log_line)
+                file_handle.flush()
+                # 只在关键日志时执行fsync，减少IO开销
+                if log_data.get("status") == "失败" or log_data.get("error_msg"):
+                    os.fsync(file_handle.fileno())
+            except Exception as e:
+                print(f"写入JSON日志失败: {e}")
 
     def close_all_handles(self) -> None:
         """关闭所有文件句柄"""
         with self._file_mutex:
-            for path, file_handle in self._file_handles.items():
+            for path, handle in list(self._file_handles.items()):
                 try:
-                    file_handle.close()
+                    if handle and not handle.closed:
+                        handle.flush()
+                        handle.close()
                 except Exception as e:
                     print(f"关闭文件句柄失败 {path}: {e}")
             self._file_handles.clear()
+            
+    def __del__(self):
+        """析构函数，确保所有文件句柄被关闭"""
+        self.close_all_handles()
 
 
 # 全局文件句柄管理器
