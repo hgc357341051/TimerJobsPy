@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import jobs
+from app.config import Config
 from app.core.job_logger import close_all_job_loggers
 from app.core.scheduler import start_scheduler
 from app.deps import engine
@@ -19,6 +20,12 @@ from app.models.base import Base, error_response
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # 确保运行时目录和备份目录存在
+    for directory in [Config.RUNTIME_DIR, Config.BACKUP_DIR]:
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+            print(f"已创建目录: {directory}")
+    
     # 启动时执行
     Base.metadata.create_all(bind=engine)
 

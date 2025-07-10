@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import logging
+import os
 from typing import Generator
 
 from sqlalchemy import create_engine, event
@@ -10,6 +11,20 @@ from app.config import Config
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+# 确保SQLite数据库目录存在
+if Config.DATABASE_TYPE.lower() == "sqlite":
+    db_path = Config.DATABASE_SQLITE_PATH
+    db_dir = os.path.dirname(db_path)
+    
+    # 如果数据库目录不存在，则创建
+    if not os.path.exists(db_dir):
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+            logger.info(f"已创建数据库目录: {db_dir}")
+        except Exception as e:
+            logger.error(f"创建数据库目录失败: {e}")
+            raise
 
 # 创建数据库引擎
 try:
